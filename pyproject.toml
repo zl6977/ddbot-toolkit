@@ -1,0 +1,22 @@
+[project]
+name = "ddbot-toolkit"
+version = "0.1.0"
+description = "Development and test environment for the model-dwis-config skill"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "DDBot Toolkit contributors" }]
+dependencies = [
+  "owlrl>=7.1,<8",
+  "rdflib>=7.1,<8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.9"]
+
+[tool.pytest.ini_options]
+pythonpath = ["model-dwis-config/scripts"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

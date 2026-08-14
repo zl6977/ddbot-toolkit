@@ -1,0 +1,50 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from ddbot_toolkit import DDBotToolkit, MotifRetriever, OntologySearch
+from ddbot_toolkit.paths import motif_library_path
+
+
+def test_ontology_search_finds_pressure_terms() -> None:
+    matches = OntologySearch().search("pressure", limit=20)
+    assert matches
+    assert any("pressure" in match.name.casefold() for match in matches)
+
+
+def test_motif_search_returns_structured_config() -> None:
+    matches = MotifRetriever().search("dynamic weight on bit bottom string", limit=1)
+    assert len(matches) == 1
+    assert matches[0].dwis_config
+    assert matches[0].intent_sketch
+
+
+def test_source_checkout_uses_shared_example_corpus() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    assert motif_library_path() == (
+        repo_root / "model-dwis-config" / "assets" / "dwis-config-examples.jsonl"
+    )
+
+
+def test_validation_accepts_known_connected_config() -> None:
+    config = """\
+DrillingSignal:f_bos_sp
+DynamicDrillingSignal:f_bos_sp
+SetPoint:f_bos_sp_01
+WOB:f_bos_sp_01
+ContinuousDataType:f_bos_sp_01
+f_bos_sp_01 HasDynamicValue f_bos_sp
+f_bos_sp_01 IsOfMeasurableQuantity ForceDrilling
+BottomOfStringReferenceLocation:bos_01
+f_bos_sp_01 IsPhysicallyLocatedAt bos_01
+"""
+    report = DDBotToolkit().validate(config)
+    assert report["valid"] is True, report
+    assert report["hard_errors"] == []
+
+
+def test_validation_returns_repair_guidance() -> None:
+    report = DDBotToolkit().validate("MadeUpClass:value")
+    assert report["valid"] is False
+    assert report["hard_errors"]
+    assert report["repair_suggestions"]
