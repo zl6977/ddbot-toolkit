@@ -4,7 +4,7 @@ from pathlib import Path
 
 from .ontology import OntologySearch
 from .paths import ontology_path
-from .retrieval import MotifRetriever
+from .retrieval import ExampleRetriever
 from .validation import DWISOntology, build_validation_components
 
 
@@ -15,11 +15,11 @@ class DDBotToolkit:
         self,
         *,
         ontology: str | Path | None = None,
-        motif_library: str | Path | None = None,
+        example_corpus: str | Path | None = None,
     ):
         ontology_file = Path(ontology or ontology_path())
         self.ontology_search = OntologySearch(ontology_file)
-        self.motif_retriever = MotifRetriever(motif_library)
+        self.example_retriever = ExampleRetriever(example_corpus)
         self._validation = build_validation_components(DWISOntology(ontology_file))
 
     def validate(self, config: str) -> dict[str, object]:
@@ -85,4 +85,3 @@ class DDBotToolkit:
                 action = "Correct the reported construction or semantic constraint and revalidate."
             suggestions.append({"message": message, "action": action})
         return suggestions
-

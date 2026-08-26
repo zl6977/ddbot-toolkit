@@ -1,13 +1,13 @@
 # Tool contract
 
-The bundled CLI delegates ontology search, motif retrieval, and validation to one Python
+The bundled CLI delegates ontology search, example retrieval, and validation to one Python
 implementation under `model-dwis-config/scripts/ddbot_toolkit/`. This document records the
 repository's interface contract; it is not part of the installed Skill.
 
 ## CLI rules
 
 - Invoke source checkouts with `uv run model-dwis-config/scripts/ddbot.py`.
-- Invoke an installed Skill with `uv run <skill-root>/scripts/ddbot.py`.
+- Invoke an installed Skill with its loader-derived `uv run <script-path>`.
 - Write the machine-readable result to stdout as UTF-8 JSON.
 - Reserve stderr for diagnostics and logs.
 - Use exit code `0` for successful results.
@@ -26,7 +26,7 @@ message text.
 ## Commands
 
 - `ontology <query> [--kind all|class|property] [--limit N]` searches the bundled ontology.
-- `motif <query> [--library PATH] [--limit N]` ranks records in the bundled or selected JSONL
+- `examples <query> [--corpus PATH] [--limit N]` ranks records in the bundled or selected JSONL
   example corpus.
 - `validate [CONFIG]` validates a file, or stdin when `CONFIG` is omitted.
 

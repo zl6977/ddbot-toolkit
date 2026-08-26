@@ -18,6 +18,20 @@ Maintain a working intent sketch throughout the conversation. For each field, tr
 
 Ask in plain engineering language. The user does not need to know DWIS classes or predicates.
 
+## Non-interactive interpretation
+
+When `SKILL.md` selects non-interactive mode, use this checklist only to classify the supplied
+description. Do not turn checklist items into questions.
+
+- Record an explicitly stated fact as `known`.
+- Record an absent optional detail as `unknown` and add it to `missing_information` only when useful.
+- Omit optional entities and relations that the description does not support.
+- When a missing detail is indispensable, select the most conservative interpretation supported by
+  the description, ontology, and retrieved examples, then record it as `assumed` and in
+  `assumptions`.
+- Do not leave `clarification_requirements` as blockers. Continue through generation and validation
+  without asking the user.
+
 ## Core description
 
 Establish these fields for every signal:

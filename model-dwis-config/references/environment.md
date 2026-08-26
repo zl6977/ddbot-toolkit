@@ -11,30 +11,32 @@ the execution capabilities the skill needs; they are not an installation tutoria
   `assets/DWISVocabulary.ttl`.
 - Write the cache used by `uv` and the directory selected for generated CONFIG files.
 - Allow network access during the first `uv` invocation only if Python or script dependencies are
-  not already cached. Ontology search, motif retrieval, and validation are local after setup.
+  not already cached. Ontology search, example retrieval, and validation are local after setup.
 
 The skill does not require a plugin, MCP server, container runtime, elevated privileges, or network
 access during normal execution.
 
 ## Preflight
 
-Resolve `<skill-root>` as the directory containing `SKILL.md`, `<output-dir>` as the existing
-directory where the requested CONFIG will be written, and `<runtime-dir>` as a sandbox-writable
-temporary or cache directory. Use a persistent sandbox cache when available; otherwise create a
-session directory with `mktemp -d`. Run:
+First apply the filesystem-boundary and loader-derived path rules in `SKILL.md`. Do not use this
+preflight to discover or repair paths. Set `<output-dir>` to the existing in-bound directory where
+the CONFIG will be written and `<runtime-dir>` to an in-bound cache directory such as
+`<cwd>/.ddbot-runtime`. Confirm canonical containment within `<cwd>` before running:
 
 ```bash
 command -v uv
 uv --version
-test -r <skill-root>/scripts/ddbot.py
-test -r <skill-root>/assets/dwis-config-examples.jsonl
-test -r <skill-root>/assets/DWISVocabulary.ttl
+test -r <loaded-skill-path>
+test -r <script-path>
+test -r <example-corpus-path>
+test -r <ontology-path>
 test -w <output-dir>
+mkdir -p <runtime-dir>/uv-cache
 test -w <runtime-dir>
-UV_CACHE_DIR=<runtime-dir>/uv-cache uv run <skill-root>/scripts/ddbot.py \
+UV_CACHE_DIR=<runtime-dir>/uv-cache uv run <script-path> --ontology <ontology-path> \
   ontology pressure --limit 1
-UV_CACHE_DIR=<runtime-dir>/uv-cache uv run <skill-root>/scripts/ddbot.py motif pressure \
-  --library <skill-root>/assets/dwis-config-examples.jsonl --limit 1
+UV_CACHE_DIR=<runtime-dir>/uv-cache uv run <script-path> examples pressure \
+  --corpus <example-corpus-path> --limit 1
 ```
 
 Treat the preflight as successful only when every command exits successfully and both DDBot
@@ -43,22 +45,21 @@ commands return JSON with at least one match. Keep using the same `UV_CACHE_DIR`
 
 ## Failure handling
 
-- If `uv` is absent, ask the user to install or expose `uv`; do not silently replace the project
-  environment with an unrelated Python interpreter.
+- If `uv` is absent, report that it must be installed or exposed; do not silently replace the
+  project environment with an unrelated Python interpreter.
 - If the default uv cache is read-only, use the writable `UV_CACHE_DIR` above; do not treat that as
   a missing dependency or request broader filesystem access.
 - If a complete compatible Python environment already contains the declared dependencies, it may
-  run `<skill-root>/scripts/ddbot.py` directly after checking Python 3.11+, resource readability,
+  run `<script-path>` directly after checking Python 3.11+, resource readability,
   output writability, and both smoke queries. Do not substitute an unrelated environment.
-- If dependency or Python resolution still fails because the sandbox blocks network access,
-  request that access or ask the user to prime the script environment with
-  `uv run <skill-root>/scripts/ddbot.py --help` outside the restricted sandbox.
-- If the skill files are unreadable, report the exact missing path and repair or reinstall the
-  complete skill package before continuing.
-- If `<output-dir>` is not writable, select a user-approved writable project directory. Do not
-  broaden sandbox permissions or write outside the user's requested scope without approval.
-- If the script cannot import its bundled `ddbot_toolkit` modules, repair or reinstall the complete
-  Skill directory; do not install a second copy of the toolkit package.
+- If dependency or Python resolution still fails because the sandbox blocks network access, report
+  the failed command and required capability. Do not run setup from another working directory.
+- If loaded path metadata is absent, a derived resource is unreadable, or a path resolves outside
+  `<cwd>`, report the exact condition and stop. Never search for a replacement.
+- If `<output-dir>` is not writable, report that exact directory and stop. Do not select another
+  directory, broaden permissions, or write outside `<cwd>`.
+- If the script cannot import its bundled `ddbot_toolkit` modules, report the exact failure and stop;
+  do not search for or install a second copy of the toolkit package.
 - If either smoke query returns invalid JSON, an error object, or no matches, stop CLI-dependent
-  work and report the command output. Collection and clarification may continue, but generation
-  must not be presented as ontology-grounded or validated.
+  work and report the command output. Do not continue generation or claim ontology grounding or
+  validation.

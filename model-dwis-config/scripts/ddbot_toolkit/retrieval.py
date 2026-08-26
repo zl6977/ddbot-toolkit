@@ -7,7 +7,7 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-from .paths import motif_library_path
+from .paths import example_corpus_path
 
 _TOKEN = re.compile(r"[A-Za-z][A-Za-z0-9_-]+")
 
@@ -17,7 +17,7 @@ def _tokens(value: str) -> set[str]:
 
 
 @dataclass(frozen=True)
-class MotifMatch:
+class ExampleMatch:
     sample_id: str
     score: float
     description: str
@@ -36,15 +36,15 @@ class MotifMatch:
         }
 
 
-class MotifRetriever:
+class ExampleRetriever:
     """Retrieve examples from the shared, leakage-safe example corpus."""
 
     def __init__(self, path: str | Path | None = None):
-        self.path = Path(path or motif_library_path())
+        self.path = Path(path or example_corpus_path())
         self._records: list[dict[str, object]] | None = None
         self._document_frequency: Counter[str] | None = None
 
-    def search(self, query: str, *, limit: int = 5) -> list[MotifMatch]:
+    def search(self, query: str, *, limit: int = 5) -> list[ExampleMatch]:
         query_tokens = _tokens(query)
         if not query_tokens:
             raise ValueError("query must contain at least one searchable word")
@@ -52,7 +52,7 @@ class MotifRetriever:
         assert self._records is not None
         assert self._document_frequency is not None
         total = len(self._records)
-        ranked: list[MotifMatch] = []
+        ranked: list[ExampleMatch] = []
         for record in self._records:
             searchable = record["_searchable_tokens"]
             overlap = query_tokens & searchable
@@ -64,7 +64,7 @@ class MotifRetriever:
             )
             descriptions = record.get("descriptions") or []
             ranked.append(
-                MotifMatch(
+                ExampleMatch(
                     sample_id=str(record["sample_id"]),
                     score=round(score, 4),
                     description=str(descriptions[0]) if descriptions else "",
@@ -88,7 +88,9 @@ class MotifRetriever:
                 try:
                     record = json.loads(line)
                 except json.JSONDecodeError as exc:
-                    raise ValueError(f"invalid motif JSONL at line {line_number}: {exc}") from exc
+                    raise ValueError(
+                        f"invalid example corpus JSONL at line {line_number}: {exc}"
+                    ) from exc
                 searchable_text = " ".join(
                     [
                         *(str(v) for v in record.get("descriptions") or []),

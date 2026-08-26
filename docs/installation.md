@@ -5,54 +5,41 @@ the instructions, Python scripts, inline runtime dependencies, ontology, and sha
 Repository-only files such as `uv.lock`, tests, and maintenance docs remain outside the Skill
 boundary. There is no generated release directory.
 
-## Install for one user
-
-Clone the repository to a development location, then symlink or copy its Skill directory into the
-discovery directory used by the agent. For agents that use the portable `.agents/skills`
-convention:
-
-```bash
-git clone <repository-url> <checkout>
-ln -s <checkout>/model-dwis-config ~/.agents/skills/model-dwis-config
-```
-
-For Codex, the corresponding user-level location is normally
-`~/.codex/skills/model-dwis-config`. Use the location configured by the target agent; do not install
-both copies unless both discovery mechanisms are intentionally being tested.
-
-The first CLI invocation lets uv create an isolated environment from the inline metadata in
-`scripts/ddbot.py`. A restricted sandbox must provide writable uv cache storage and may need network
-access during this first invocation; normal toolkit commands are local afterward. See the Skill's
-[`references/environment.md`](../model-dwis-config/references/environment.md).
-
 ## Install for one repository
 
-Clone, copy, or add the skill under the target repository:
+Copy, vendor, or add the Skill under the target repository:
 
 ```text
 <repository>/.agents/skills/model-dwis-config/
 ```
 
-A symlink to `<checkout>/model-dwis-config` is suitable for local development because edits in this
-repository become visible to the target agent immediately. Restart the agent or start a new session
-if it discovers Skills only at startup.
+The Skill treats the host working directory as its filesystem boundary. Its loader-resolved
+`SKILL.md`, bundled scripts, ontology, examples, runtime cache, CONFIG inputs, and outputs must all
+resolve inside that directory. Do not use a user-level installation or a symlink whose canonical
+target is outside the repository; copy or vendor the Skill instead.
+
+The first CLI invocation lets uv create an isolated environment from the inline metadata in
+`scripts/ddbot.py`. Keep the uv cache inside the working directory. The first invocation may need
+network access; normal toolkit commands are local afterward. See the Skill's
+[`references/environment.md`](../model-dwis-config/references/environment.md).
 
 ## Run the CLI
 
-Invoke the bundled PEP 723 script from any working repository with:
+Derive the bundled PEP 723 script path from Skill loader metadata and invoke it from the containing
+working directory with:
 
 ```bash
-uv run <skill-root>/scripts/ddbot.py <command>
+uv run <script-path> <command>
 ```
 
-When the sandbox's default uv cache is read-only, set `UV_CACHE_DIR` to a sandbox-writable cache
-directory and retain that setting for every CLI invocation in the session. The Skill directory
-itself may remain read-only.
+Set `UV_CACHE_DIR` to a writable cache contained within the same working directory and retain that
+setting for every CLI invocation in the session. The Skill directory itself may remain read-only.
 
-For example:
+For example, when the loader selected the project-local Skill:
 
 ```bash
-uv run ~/.agents/skills/model-dwis-config/scripts/ddbot.py ontology "standpipe pressure"
+uv run <repository>/.agents/skills/model-dwis-config/scripts/ddbot.py ontology \
+  "standpipe pressure"
 ```
 
 ## Release checklist

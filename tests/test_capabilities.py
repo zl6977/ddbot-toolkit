@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ddbot_toolkit import DDBotToolkit, MotifRetriever, OntologySearch
-from ddbot_toolkit.paths import motif_library_path
+from ddbot_toolkit import DDBotToolkit, ExampleRetriever, OntologySearch
+from ddbot_toolkit.paths import example_corpus_path
 
 
 def test_ontology_search_finds_pressure_terms() -> None:
@@ -12,8 +12,8 @@ def test_ontology_search_finds_pressure_terms() -> None:
     assert any("pressure" in match.name.casefold() for match in matches)
 
 
-def test_motif_search_returns_structured_config() -> None:
-    matches = MotifRetriever().search("dynamic weight on bit bottom string", limit=1)
+def test_example_search_returns_structured_config() -> None:
+    matches = ExampleRetriever().search("dynamic weight on bit bottom string", limit=1)
     assert len(matches) == 1
     assert matches[0].dwis_config
     assert matches[0].intent_sketch
@@ -21,7 +21,7 @@ def test_motif_search_returns_structured_config() -> None:
 
 def test_source_checkout_uses_shared_example_corpus() -> None:
     repo_root = Path(__file__).resolve().parents[1]
-    assert motif_library_path() == (
+    assert example_corpus_path() == (
         repo_root / "model-dwis-config" / "assets" / "dwis-config-examples.jsonl"
     )
 

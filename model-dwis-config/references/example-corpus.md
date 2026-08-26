@@ -1,7 +1,7 @@
 # Example corpus
 
-`assets/dwis-config-examples.jsonl` is the shared retrieval corpus used by both the Agent
-and `ddbot motif`. Each non-empty line is one independent JSON object.
+`assets/dwis-config-examples.jsonl` is the shared retrieval corpus used by both the agent
+and `ddbot examples`. Each non-empty line is one independent JSON object.
 
 ## Keyword retrieval
 
@@ -10,12 +10,13 @@ three to six terms for the core concept, value role, origin, and location or equ
 known and applicable values. Search transformation, uncertainty, timing, or other secondary
 patterns separately when combining everything would dilute the core match.
 
-Search this JSONL explicitly with `ddbot motif` so the Agent receives ranked, structured matches:
+Search this JSONL explicitly with `ddbot examples` so the agent receives ranked, structured
+matches:
 
 ```bash
-uv run <skill-root>/scripts/ddbot.py motif \
+uv run <script-path> examples \
   "standpipe pressure measured sensor" \
-  --library <skill-root>/assets/dwis-config-examples.jsonl \
+  --corpus <example-corpus-path> \
   --limit 5
 ```
 
@@ -31,14 +32,15 @@ the user's intent.
 
 ## Direct inspection
 
-Search the JSONL directly only when inspecting provenance or fields that the CLI result does not
-expose. Limit direct searches to a few matching records; never read the whole corpus into context.
+Search the JSONL directly when inspecting provenance or accessing fields that the CLI result does
+not expose. Limit direct searches to a few matching records; never read the whole corpus into
+context.
 
 Useful direct searches include:
 
 ```bash
-rg -i -m 5 'standpipe pressure' <skill-root>/assets/dwis-config-examples.jsonl
-rg -n -m 5 'HasDynamicValue' <skill-root>/assets/dwis-config-examples.jsonl
+rg -i -m 5 'standpipe pressure' <example-corpus-path>
+rg -n -m 5 'HasDynamicValue' <example-corpus-path>
 ```
 
 ## Record fields

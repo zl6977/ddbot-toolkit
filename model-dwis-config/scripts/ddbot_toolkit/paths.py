@@ -15,8 +15,8 @@ def ontology_path() -> Path:
     return skill_root() / "assets" / "DWISVocabulary.ttl"
 
 
-def motif_library_path() -> Path:
-    override = os.environ.get("DDBOT_MOTIF_LIBRARY_PATH")
+def example_corpus_path() -> Path:
+    override = os.environ.get("DDBOT_EXAMPLE_CORPUS_PATH")
     if override:
         return Path(override)
     return skill_root() / "assets" / "dwis-config-examples.jsonl"

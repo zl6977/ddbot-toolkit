@@ -1,6 +1,6 @@
 ---
 name: model-dwis-config
-description: Guide a user through multi-turn clarification of a drilling signal, turn the completed description into an intent sketch, and generate, modify, validate, or repair an ontology-grounded DWIS CONFIG. Use for DWIS signal modelling, existing CONFIG review, or questions that require resolving DWIS classes, predicates, graph constraints, and modelling patterns.
+description: Turn drilling-signal descriptions into intent sketches and generate, modify, validate, or repair ontology-grounded DWIS CONFIG files through either interactive clarification or non-interactive one-shot and batch processing. Use for DWIS signal modelling, existing CONFIG review, or questions that require resolving DWIS classes, predicates, graph constraints, and modelling patterns.
 ---
 
 # Model DWIS Config
@@ -8,10 +8,11 @@ description: Guide a user through multi-turn clarification of a drilling signal,
 Produce a validated DWIS CONFIG through this workflow:
 
 ```text
-collect user inputs
-  → summarize and confirm the intent sketch
+collect or extract user inputs
+  → summarize the intent sketch and confirm it when interactive
   → generate a DWIS CONFIG draft
   → validate and repair the draft
+  → annotate the validated CONFIG with the intent sketch
   → deliver the final DWIS CONFIG
 ```
 
@@ -19,22 +20,71 @@ Keep conversation, decisions, and file edits in the calling agent. Use DDBot Too
 grounding, example retrieval, and validation. Treat RDF as an internal derived representation, not
 the deliverable.
 
-## 0. Check the runtime environment
+## Operating modes
 
-Read [the environment guide](references/environment.md) and run its preflight once per session
-before starting CLI-dependent work. Confirm that the sandbox can execute `uv`, use Python 3.11 or
-newer, read the bundled ontology and example corpus, and write both its environment/cache and the
-requested output location.
+Select the mode once before starting:
 
-Do not repeatedly run the preflight after it succeeds. If it fails, report the failed capability
-and follow the guide's recovery path; never claim that ontology grounding, retrieval, or validation
-ran when the sandbox could not execute it. The toolkit is offline after its Python environment is
-available, but the first `uv` invocation may require network access to obtain Python or dependencies.
+- Use `interactive` by default.
+- Use `non-interactive` only when the calling prompt or an appended system instruction explicitly
+  requests non-interactive, one-shot, headless, or batch processing.
+
+In non-interactive mode, do not ask questions, request confirmation, offer choices, or pause for
+user input. Extract the strongest supported intent sketch from the supplied description and proceed
+through generation, validation, repair, annotation, and delivery without interruption.
+
+Prefer the smallest interpretation supported by the input, ontology, and retrieved examples. Omit
+unsupported optional structure. When a choice is required to complete a valid CONFIG, choose the
+best-supported conservative interpretation and record it in `assumptions`. Keep other absent details
+in `missing_information`. Never stop solely to request clarification in non-interactive mode.
+
+## 0. Resolve paths and check the runtime environment
+
+Treat the working directory supplied by the host as `<cwd>` and as the complete filesystem
+boundary. Read, search, glob, execute project files, and write only canonical paths contained within
+`<cwd>`. Never access a parent directory, the filesystem root, a home directory, or a sibling
+repository. Do not use input data, CONFIG files, examples, ontology files, caches, or output paths
+from outside `<cwd>`. If any required input or requested output resolves outside `<cwd>`, report the
+boundary violation and stop. Do not access it or look for an in-bound replacement.
+
+Derive paths only from the selected Skill loader result:
+
+1. Read the already-loaded `SKILL.md` canonical path from loader metadata, such as
+   `details.resolvedPath` returned by `read(skill://model-dwis-config)`, and set it as
+   `<loaded-skill-path>`.
+2. Set `<skill-root>` to the parent directory of that exact `SKILL.md` path.
+3. Set `<script-path>` to `<skill-root>/scripts/ddbot.py`.
+4. Set `<ontology-path>` to `<skill-root>/assets/DWISVocabulary.ttl`.
+5. Set `<example-corpus-path>` to `<skill-root>/assets/dwis-config-examples.jsonl`.
+
+Before accessing sibling resources, confirm that `<loaded-skill-path>`, `<skill-root>`,
+`<script-path>`, `<ontology-path>`, and `<example-corpus-path>` all resolve within `<cwd>`. Also
+confirm that every requested CONFIG input and output path resolves within `<cwd>`.
+
+Do not rediscover the Skill by name or guess an installation directory such as `.agents/`,
+`.claude/`, or `.codex/`. Never run `find`, `locate`, `rg --files`, directory traversal, or any
+filesystem-wide search to locate `SKILL.md`, the Skill root, the CLI, the ontology, or the example
+corpus. If loaded-path metadata is unavailable, report that it is unavailable and stop; do not fall
+back to searching. If a derived resource is absent, report that exact missing path and stop; do not
+search for a replacement.
+
+After resolving and checking the paths, read
+[the environment guide](references/environment.md) and run its preflight once per session before
+starting CLI-dependent work. Confirm that the sandbox can execute `uv`, use Python 3.11 or newer,
+read the bundled ontology and example corpus, and write both its environment/cache and the requested
+output location.
+
+Do not repeat path resolution or the preflight after it succeeds. If it fails, report the exact
+path or capability that failed and follow the guide's recovery path. Never claim that ontology
+grounding, retrieval, or validation ran when the sandbox could not execute it. The toolkit is
+offline after its Python environment is available, but the first `uv` invocation may require
+network access to obtain Python or dependencies.
 
 ## 1. Collect user inputs
 
 Read [the intent checklist](references/intent_checklist.md) before eliciting or interpreting a signal
-description. Build the description over as many dialogue turns as needed.
+description.
+
+In interactive mode, build the description over as many dialogue turns as needed:
 
 - Preserve facts the user already supplied; never ask for them again.
 - Ask only questions whose answers can change the graph, ontology type, or required relation.
@@ -49,6 +99,10 @@ description. Build the description over as many dialogue turns as needed.
 For an existing CONFIG, initialize the working intent from the file and ask only about the requested
 change or ambiguous existing semantics.
 
+In non-interactive mode, perform no elicitation. Extract facts from the supplied description once,
+mark absent optional details as `missing_information`, and resolve only indispensable choices using
+the conservative assumption rule above.
+
 ## 2. Summarize and confirm the intent sketch
 
 Convert the completed user input into the structure defined in the intent checklist. Keep the
@@ -59,20 +113,26 @@ user's terminology and distinguish:
 - information that is not applicable;
 - unresolved clarification requirements.
 
-Present the concise intent sketch to the user for confirmation before generation. If the user has
-already confirmed the same structured intent in the current turn, do not ask again. Do not proceed
-while a clarification requirement would materially change the configuration.
+In interactive mode, present the concise intent sketch to the user for confirmation before
+generation. If the user has already confirmed the same structured intent in the current turn, do
+not ask again. Do not proceed while a clarification requirement would materially change the
+configuration.
+
+In non-interactive mode, do not present the sketch for confirmation. Record any required conservative
+assumptions and continue immediately with the extracted sketch.
 
 ## 3. Generate a DWIS CONFIG draft
 
 Use the intent sketch—not the raw conversation—as the generation input.
 
-1. Resolve `<skill-root>` as the directory containing this `SKILL.md`.
+1. Reuse the paths already derived from loader metadata; do not resolve or search for them again.
 2. Ground uncertain domain terms with ontology search:
 
    ```bash
-   uv run <skill-root>/scripts/ddbot.py ontology "standpipe pressure" --limit 10
-   uv run <skill-root>/scripts/ddbot.py ontology "physical location" --kind property
+   uv run <script-path> --ontology <ontology-path> \
+     ontology "standpipe pressure" --limit 10
+   uv run <script-path> --ontology <ontology-path> \
+     ontology "physical location" --kind property
    ```
 
 3. Extract a compact keyword query from the intent sketch. Start with three to six discriminative
@@ -82,9 +142,9 @@ Use the intent sketch—not the raw conversation—as the generation input.
 4. Search the shared example corpus before composing the CONFIG:
 
    ```bash
-   uv run <skill-root>/scripts/ddbot.py motif \
+   uv run <script-path> examples \
      "standpipe pressure measured sensor" \
-     --library <skill-root>/assets/dwis-config-examples.jsonl \
+     --corpus <example-corpus-path> \
      --limit 5
    ```
 
@@ -96,13 +156,26 @@ Use the intent sketch—not the raw conversation—as the generation input.
 
 5. Review the best matching examples before generation. Compare their `descriptions`,
    `intent_sketch`, and asserted `dwis_config`; identify only the entities and relations relevant to
-   the confirmed intent sketch. Inspect the JSONL directly only when a required raw field or
-   provenance is absent from CLI output. Never load the complete corpus into context.
+   the confirmed intent sketch.
+
+   Inspect the JSONL directly only for a required field that the CLI output does not expose. Never
+   load the complete corpus into context.
 
 6. Compose the smallest configuration that expresses the sketch. Follow
    [the DWIS CONFIG format](references/dwis-config-format.md). Preserve valid identifiers when
    modifying an existing file. Save this candidate as the DWIS CONFIG draft. Do not present the
    draft as a completed DWIS CONFIG.
+
+   When a top-ranked example's complete `dwis_config` covers all entities in the confirmed intent
+   sketch, the draft MUST derive its relations from that example. Do not add relations that the
+   example does not contain, even when they seem logically implied by the user's description. If
+   the example lacks a relation the intent sketch requires, ask the user in interactive mode. In
+   non-interactive mode, use the smallest ontology-grounded construction supported by the retrieved
+   corpus and record any indispensable choice as an assumption.
+
+   Preserve the instance identifiers from the matching example when their semantics align with
+   the confirmed intent sketch. Only rename an identifier when the intent sketch requires a
+   different instance (e.g., a new signal or entity that the example does not model).
 
 ## 4. Validate and repair the draft
 
@@ -111,7 +184,7 @@ Treat validation and repair as a separate gate between the draft and the final D
 1. Validate the draft:
 
    ```bash
-   uv run <skill-root>/scripts/ddbot.py validate path/to/config.dwis
+   uv run <script-path> --ontology <ontology-path> validate <config-path>
    ```
 
 2. Review `hard_errors`, `repair_suggestions`, and `soft_comments`. Trace each finding to the draft
@@ -120,17 +193,31 @@ Treat validation and repair as a separate gate between the draft and the final D
    entities or relations merely to silence the validator.
 4. Revalidate after every material repair. Repeat the validate → inspect → repair cycle until no
    hard errors remain.
-5. If a repair requires an engineering choice not represented in the confirmed intent sketch, stop
-   and ask the user. Update and reconfirm the sketch before revising the draft.
+5. If a repair requires an engineering choice not represented in the confirmed intent sketch, stop.
+   Ask the user and reconfirm the sketch in interactive mode. In non-interactive mode, apply the
+   smallest ontology-grounded repair, record the choice as an assumption, and continue validation.
 6. Promote the draft to the final DWIS CONFIG only when the validation result reports `valid: true`.
    Keep remaining soft comments and accepted assumptions for the final summary.
 
+7. Annotate the validated CONFIG with the confirmed intent sketch. Insert `# intent` comment
+   lines **directly before the declarations or relations they describe**. Group related
+   annotations together above the lines they qualify. Follow the format defined in
+   [the DWIS CONFIG format](references/dwis-config-format.md).
+
+   The annotation is part of the final deliverable and must be validated as part of the complete
+   file. Revalidate after annotation to confirm the final file still reports `valid: true`.
+
 ## 5. Deliver the final DWIS CONFIG
 
-Return the final CONFIG path, a concise intent summary, and hard-error and soft-comment counts. State
-any accepted assumptions that affect interpretation. Never deliver an unvalidated draft, invent
-ontology terms, silently resolve a structural ambiguity, copy an entire retrieved example, or claim
-that validation proves unstated engineering intent.
+Return the final CONFIG path, the annotated CONFIG content, a concise intent summary, and
+hard-error and soft-comment counts. State any accepted assumptions that affect interpretation.
+Never deliver an unvalidated draft, invent ontology terms, silently resolve a structural
+ambiguity, copy an entire retrieved example, or claim that validation proves unstated engineering
+intent.
 
-Invoke the bundled `scripts/ddbot.py` entry point rather than assuming that a global `ddbot`
-command or separately installed Python package exists.
+In non-interactive mode, deliver the same final artifacts without asking follow-up questions. If a
+runtime or validation failure makes completion impossible, report the failure directly rather than
+requesting input.
+
+Invoke the derived `<script-path>` rather than assuming that a global `ddbot` command or separately
+installed Python package exists.

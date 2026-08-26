@@ -41,17 +41,18 @@ Because an agent normally works in the user's repository rather than the skill d
 the Skill's entry script by its resolved path:
 
 ```bash
-uv run <skill-root>/scripts/ddbot.py <command>
+uv run <script-path> <command>
 ```
 
-Resolve the installed path from the selected `SKILL.md`; never hard-code a developer checkout path.
+Derive `<script-path>` from the exact loader-resolved `SKILL.md` as specified by the Skill. Never
+hard-code a developer checkout path or search the filesystem for an installation.
 
 ## Current capabilities
 
 | Capability | Python implementation | CLI command |
 |---|---|---|
 | Ontology search | `OntologySearch.search` | `ontology` |
-| Example retrieval | `MotifRetriever.search` | `motif` |
+| Example retrieval | `ExampleRetriever.search` | `examples` |
 | Validation | `DDBotToolkit.validate` | `validate` |
 
 ## Single-source layout

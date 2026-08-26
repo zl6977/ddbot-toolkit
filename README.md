@@ -28,7 +28,7 @@ Install the repository development environment, then run the Skill's PEP 723 ent
 uv sync --extra dev
 
 uv run model-dwis-config/scripts/ddbot.py ontology "standpipe pressure"
-uv run model-dwis-config/scripts/ddbot.py motif "measured standpipe pressure" --limit 3
+uv run model-dwis-config/scripts/ddbot.py examples "measured standpipe pressure" --limit 3
 uv run model-dwis-config/scripts/ddbot.py validate path/to/config.dwis
 uv run pytest
 ```
@@ -68,19 +68,25 @@ pyproject.toml                     repository development/test environment
 uv.lock                            repository development dependency lock
 ```
 
-The `model-dwis-config/` directory is the complete Skill boundary. Clone the repository anywhere,
-then copy or symlink only that directory into a skill discovery location:
+The `model-dwis-config/` directory is the complete Skill boundary. Vendor or copy it into the target
+project so its canonical path remains within that project's working directory:
 
 ```bash
-ln -s <checkout>/model-dwis-config ~/.agents/skills/model-dwis-config
+cp -R <checkout>/model-dwis-config <project>/.agents/skills/model-dwis-config
 ```
+
+Do not symlink it to a checkout outside the working directory. The Skill deliberately rejects
+loader-resolved paths and resources outside that boundary.
 
 See [installation](docs/installation.md) for repository-scoped installation and CLI invocation.
 
 Environment overrides:
 
 - `DDBOT_ONTOLOGY_PATH`: Turtle ontology file
-- `DDBOT_MOTIF_LIBRARY_PATH`: motif JSONL file
+- `DDBOT_EXAMPLE_CORPUS_PATH`: example corpus JSONL file
+
+During Skill execution, any override must resolve within the host working directory. The Skill uses
+its loader-derived bundled paths explicitly and rejects out-of-bound resources.
 
 See the [architecture](docs/architecture.md), [tool contract](docs/tool-contract.md), and
 [installation guide](docs/installation.md) for repository maintenance details.

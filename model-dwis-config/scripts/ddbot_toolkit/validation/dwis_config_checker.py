@@ -58,7 +58,7 @@ class DWISConfigChecker:
         lines: list[DWISConfigLine] = []
         for raw_line in dwis_config.splitlines():
             line = raw_line.strip()
-            if not line or line.startswith("dwis "):
+            if not line or line.startswith("dwis ") or line.startswith("#"):
                 continue
             line_type = "type" if ":" in line else "relation"
             lines.append(DWISConfigLine(text=line, line_type=line_type))

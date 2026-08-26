@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from .ontology import OntologySearch
-from .retrieval import MotifRetriever
+from .retrieval import ExampleRetriever
 from .services import DDBotToolkit
 
 
@@ -20,10 +20,10 @@ def _parser() -> argparse.ArgumentParser:
     ontology.add_argument("--kind", choices=("all", "class", "property"), default="all")
     ontology.add_argument("--limit", type=int, default=10)
 
-    motif = commands.add_parser("motif", help="retrieve example DWIS configurations")
-    motif.add_argument("query")
-    motif.add_argument("--library", type=Path, help="example corpus JSONL to search")
-    motif.add_argument("--limit", type=int, default=5)
+    examples = commands.add_parser("examples", help="retrieve example DWIS configurations")
+    examples.add_argument("query")
+    examples.add_argument("--corpus", type=Path, help="example corpus JSONL to search")
+    examples.add_argument("--limit", type=int, default=5)
 
     validate = commands.add_parser("validate", help="validate a DWIS DSL configuration")
     validate.add_argument("config", nargs="?", type=Path, help="file to validate; stdin when omitted")
@@ -42,10 +42,10 @@ def main(argv: list[str] | None = None) -> int:
             ]
             payload: object = {"query": args.query, "matches": result}
             exit_code = 0
-        elif args.command == "motif":
+        elif args.command == "examples":
             result = [
                 match.to_dict()
-                for match in MotifRetriever(args.library).search(args.query, limit=args.limit)
+                for match in ExampleRetriever(args.corpus).search(args.query, limit=args.limit)
             ]
             payload = {"query": args.query, "matches": result}
             exit_code = 0
