@@ -1,16 +1,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterator
 
 if TYPE_CHECKING:
     from rdflib import Graph
 
 
+def iter_dwis_config_lines(dwis_config: str) -> Iterator[tuple[int, str]]:
+    """Yield trimmed, nonblank, non-comment lines with source line numbers."""
+    for line_number, raw_line in enumerate(dwis_config.splitlines(), 1):
+        line = raw_line.strip()
+        if line and not line.startswith("#"):
+            yield line_number, line
+
+
 @dataclass(frozen=True)
 class DWISConfigLine:
     text: str
-    line_type: str
+    line_type: str  # "type" | "relation" | "property" | "invalid"
 
     @staticmethod
     def split_type(text: str) -> tuple[str, str]:
@@ -24,13 +32,33 @@ class DWISConfigLine:
         subject_id, predicate_name, object_id = text.split()
         return subject_id, predicate_name, object_id
 
+    @staticmethod
+    def split_property(text: str) -> tuple[str, str, str]:
+        """Parse 'instance.property = literal' into (instance_id, property_name, literal).
+
+        The literal keeps its quoting: a quoted string stays quoted so the
+        caller can distinguish string vs. numeric literals.
+        """
+        subject, _, literal = text.partition("=")
+        instance_id, _, property_name = subject.strip().partition(".")
+        return instance_id.strip(), property_name.strip(), literal.strip()
+
+    @staticmethod
+    def is_property_line(text: str) -> bool:
+        """True for 'instance.property = literal' lines."""
+        # TImestamp literals might have :
+        if "=" not in text or ":" in text.split("=")[0]:
+            return False
+        subject = text.split("=", 1)[0].strip()
+        return subject.count(".") == 1 and all(subject.split("."))
+
 
 @dataclass
 class CheckResult:
-    """Outcome of running a deterministic checker.
+    """Outcome of running a blocking deterministic rule.
 
     ``is_valid`` is True when no ``[error]`` messages are produced.
-    ``messages`` may contain ``[warning]`` entries even when ``is_valid`` is True.
+    Non-blocking observations are represented by ``DiagnosticResult`` instead.
     """
 
     rule_name: str
@@ -42,6 +70,23 @@ class CheckResult:
             "rule_name": self.rule_name,
             "is_valid": self.is_valid,
             "messages": self.messages,
+        }
+
+
+@dataclass
+class DiagnosticResult:
+    """Outcome of a non-blocking deterministic diagnostic."""
+
+    diagnostic_name: str
+    triggered: bool
+    messages: list[str] = field(default_factory=list)
+    details: dict[str, object] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "triggered": self.triggered,
+            "messages": self.messages,
+            **self.details,
         }
 
 
@@ -65,15 +110,14 @@ class DWISToRDFResult:
 class ReasoningResult:
     """Outcome of running the OWL-RL reasoner over a sample's instance graph."""
 
-    warnings: list[str] = field(default_factory=list)
-    inferred_size_ratio: float = 1.0
-    inferred_size_warning: bool = False
+    diagnostics: list[DiagnosticResult] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "warnings": self.warnings,
-            "inferred_size_ratio": self.inferred_size_ratio,
-            "inferred_size_warning": self.inferred_size_warning,
+            "diagnostics": {
+                diagnostic.diagnostic_name: diagnostic.to_dict()
+                for diagnostic in self.diagnostics
+            },
         }
 
 

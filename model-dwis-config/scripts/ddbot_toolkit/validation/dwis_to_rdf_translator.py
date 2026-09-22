@@ -1,11 +1,19 @@
 from __future__ import annotations
 
-from rdflib import BNode, Graph, URIRef
-from rdflib.namespace import OWL, RDF
+import json
+from collections.abc import Iterable
+
+from rdflib import BNode, Graph, Literal, URIRef
+from rdflib.namespace import OWL, RDF, XSD
 from rdflib.term import Node
 
+from .dwis_config_checker import (
+    normalize_attribute_literal,
+    select_compatible_attribute_datatype,
+)
 from .ontology_lookup import INSTANCE_NS, DWISOntology
 from .schemas import CheckResult, DWISConfigLine, DWISToRDFResult
+
 
 class DWISToRDFTranslator:
     def __init__(self, ontology: DWISOntology):
@@ -43,8 +51,19 @@ class DWISToRDFTranslator:
         for config_line in config_lines:
             if config_line.line_type == "relation":
                 self._construct_relation(config_line.text, graph, declared_instances, blank_nodes)
+            elif config_line.line_type == "property":
+                self._construct_property(config_line.text, graph)
 
         return graph
+
+    def _construct_property(self, line: str, graph: Graph) -> None:
+        """Add 'instance.property = literal' as an RDF datatype triple."""
+        instance_id, property_name, literal_text = DWISConfigLine.split_property(line)
+        instance_uri = URIRef(f"{INSTANCE_NS}{instance_id}")
+        property_uri = self.ontology.get_property_uri(property_name)
+        ranges = self.ontology.get_property_constraints(property_name)[1]
+        literal = construct_attribute_literal(literal_text, ranges)
+        graph.add((instance_uri, property_uri, literal))
 
     def _construct_relation(
         self,
@@ -80,6 +99,34 @@ class DWISToRDFTranslator:
         return blank_node
 
 
+def construct_attribute_literal(text: str, ranges: Iterable[URIRef]) -> Literal:
+    """Construct a range-typed literal, falling back to a generic literal."""
+    datatype = select_compatible_attribute_datatype(text, ranges)
+    if datatype is None:
+        return _parse_generic_literal(text)
+    normalized = normalize_attribute_literal(text, datatype)
+    if normalized is None:
+        raise ValueError(f"Literal '{text}' is incompatible with datatype '{datatype}'.")
+    if datatype in {XSD.string, XSD.dateTime}:
+        return Literal(json.loads(normalized), datatype=datatype)
+    if datatype == XSD.boolean:
+        return Literal(normalized == "true", datatype=datatype)
+    return Literal(normalized, datatype=datatype, normalize=False)
+
+
+def _parse_generic_literal(text: str) -> Literal:
+    """Preserve a value as an untyped literal when no target datatype is known."""
+    if text.startswith('"') and text.endswith('"'):
+        try:
+            value = json.loads(text)
+        except (json.JSONDecodeError, ValueError):
+            pass
+        else:
+            if isinstance(value, str):
+                return Literal(value)
+    return Literal(text)
+
+
 def serialize_rdf_turtle(graph: Graph) -> str:
     turtle_graph = Graph()
     turtle_graph.bind("inst", INSTANCE_NS)
@@ -89,3 +136,9 @@ def serialize_rdf_turtle(graph: Graph) -> str:
     for triple in graph:
         turtle_graph.add(triple)
     return turtle_graph.serialize(format="turtle").strip()
+
+
+def parse_rdf_turtle(turtle: str) -> Graph:
+    graph = Graph()
+    graph.parse(data=turtle, format="turtle")
+    return graph

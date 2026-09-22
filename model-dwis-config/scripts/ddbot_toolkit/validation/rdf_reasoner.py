@@ -5,7 +5,7 @@ from rdflib import BNode, Graph, Literal, URIRef
 from rdflib.namespace import OWL, RDF, RDFS
 
 from .ontology_lookup import INSTANCE_NS, DWISOntology
-from .schemas import ReasoningResult
+from .schemas import DiagnosticResult, ReasoningResult
 
 SIZE_WARNING_RATIO = 3.0
 SIZE_WARNING_FLOOR = 10
@@ -32,9 +32,9 @@ class RDFReasoner:
         self._closed_tbox = self._closure(self._copy(ontology.graph)) if use_full_ontology else None
 
     def reason(self, asserted_graph: Graph) -> tuple[Graph, ReasoningResult]:
-        warnings: list[str] = []
         if len(asserted_graph) == 0:
-            return Graph(), ReasoningResult(warnings=warnings)
+            diagnostic = self.diagnose_reasoning_growth(0, 0)
+            return Graph(), ReasoningResult(diagnostics=[diagnostic])
 
         raw_count = sum(1 for triple in asserted_graph if self._keep(*triple))
         working = self._build_working_graph(asserted_graph)
@@ -49,23 +49,41 @@ class RDFReasoner:
             self._prune_types(inferred_graph)
 
         inferred_count = len(inferred_graph)
+        growth_diagnostic = self.diagnose_reasoning_growth(raw_count, inferred_count)
+
+        return inferred_graph, ReasoningResult(
+            diagnostics=[growth_diagnostic],
+        )
+
+    def diagnose_reasoning_growth(
+        self, raw_count: int, inferred_count: int
+    ) -> DiagnosticResult:
         ratio = inferred_count / raw_count if raw_count else float(inferred_count or 1)
-        size_warning = (
+        exceeds_threshold = (
             raw_count > 0
             and ratio >= self.size_warning_ratio
             and (inferred_count - raw_count) >= self.size_warning_floor
         )
-        if size_warning:
-            warnings.append(
-                f"[warning][structural] Inferred graph is {ratio:.1f}x larger than the asserted graph "
+        messages = []
+        if exceeds_threshold:
+            messages.append(
+                f"[warning][diagnostic] Inferred graph is {ratio:.1f}x larger than the asserted graph "
                 f"({inferred_count} vs {raw_count} triples); this may indicate an unexpected predicate, "
                 f"broad domain/range, or broad property hierarchy."
             )
-
-        return inferred_graph, ReasoningResult(
-            warnings=warnings,
-            inferred_size_ratio=round(ratio, 3),
-            inferred_size_warning=size_warning,
+        return DiagnosticResult(
+            diagnostic_name="reasoning_growth",
+            triggered=exceeds_threshold,
+            messages=messages,
+            details={
+                "asserted_triple_count": raw_count,
+                "inferred_triple_count": inferred_count,
+                "graph_growth_ratio": round(ratio, 3),
+                "thresholds": {
+                    "growth_ratio": self.size_warning_ratio,
+                    "additional_triples": self.size_warning_floor,
+                },
+            },
         )
 
     def _build_working_graph(self, asserted_graph: Graph) -> Graph:
@@ -126,7 +144,8 @@ class RDFReasoner:
         if not isinstance(pred, URIRef) or self.ontology.get_property_name(pred) is None:
             return False
         if isinstance(obj, Literal):
-            return False
+            # Property-value triples (datatype properties) are asserted facts.
+            return True
         return self._is_instance_node(obj)
 
     def _prune_types(self, graph: Graph) -> None:

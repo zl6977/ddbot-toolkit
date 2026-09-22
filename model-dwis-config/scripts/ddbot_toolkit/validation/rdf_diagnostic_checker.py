@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from itertools import combinations
 
-from rdflib import BNode, Graph, URIRef
+from rdflib import BNode, Graph, Literal, URIRef
 from rdflib.collection import Collection
 from rdflib.namespace import OWL, RDF
 from rdflib.term import Node
@@ -12,231 +12,259 @@ from .schemas import CheckResult, RDFDiagnosticResult
 
 
 class RDFDiagnosticChecker:
+    """Apply the README semantic rules, one method per named rule."""
+
     def __init__(self, ontology: DWISOntology):
         self.ontology = ontology
 
     def check(self, asserted_graph: Graph, inferred_graph: Graph | None = None) -> RDFDiagnosticResult:
-        result = RDFDiagnosticResult()
-
-        asserted_disjointness = self.check_asserted_type_disjointness(asserted_graph)
-        inferred_disjointness = self.check_inferred_type_disjointness(asserted_graph, inferred_graph)
-        functional_conflicts = self.check_functional_property_conflicts(asserted_graph, inferred_graph)
-        connectivity = self.check_connectivity(asserted_graph)
-
-        result.check_results.extend(
-            [
-                asserted_disjointness,
-                inferred_disjointness,
-                functional_conflicts,
-                connectivity,
-            ]
-        )
-
-        result.disjointness_conflicts.extend(asserted_disjointness.messages)
-        result.disjointness_conflicts.extend(inferred_disjointness.messages)
-        result.functional_conflicts.extend(functional_conflicts.messages)
-        result.connectivity_messages.extend(connectivity.messages)
-
-        result.messages.extend(result.disjointness_conflicts)
-        result.messages.extend(result.functional_conflicts)
-        result.messages.extend(result.connectivity_messages)
+        checks = [
+            self.check_asserted_type_disjointness(asserted_graph),
+            self.check_inferred_type_disjointness(asserted_graph, inferred_graph),
+            self.check_asserted_graph_connectivity(asserted_graph),
+            self.check_relation_domain_compatibility(asserted_graph),
+            self.check_relation_range_compatibility(asserted_graph),
+            self.check_functional_relation_conflict(asserted_graph),
+            self.check_attribute_domain_compatibility(asserted_graph),
+            self.check_functional_attribute_conflict(asserted_graph),
+        ]
+        result = RDFDiagnosticResult(check_results=checks)
+        result.disjointness_conflicts = [
+            message for check in checks[:2] for message in check.messages
+        ]
+        result.functional_conflicts = [
+            message for check in checks
+            if check.rule_name in {"functional_relation_conflict", "functional_attribute_conflict"}
+            for message in check.messages
+        ]
+        result.connectivity_messages = checks[2].messages.copy()
+        result.messages = [message for check in checks for message in check.messages]
         return result
 
     def check_asserted_type_disjointness(self, asserted_graph: Graph) -> CheckResult:
-        messages = self._check_type_disjointness(asserted_graph, label="asserted")
-        return self._check_result("asserted_type_disjointness", messages)
+        return self._check_result(
+            "asserted_type_disjointness",
+            self._type_disjointness_messages(asserted_graph, label="asserted"),
+        )
 
     def check_inferred_type_disjointness(
-        self,
-        asserted_graph: Graph,
-        inferred_graph: Graph | None,
+        self, asserted_graph: Graph, inferred_graph: Graph | None
     ) -> CheckResult:
         if inferred_graph is None:
             return self._check_result("inferred_type_disjointness", [])
-
-        combined = Graph()
-        for triple in asserted_graph:
-            combined.add(triple)
+        combined = self._copy_graph(asserted_graph)
         for triple in inferred_graph:
             combined.add(triple)
-        messages = self._check_type_disjointness(combined, label="inferred")
-        return self._check_result("inferred_type_disjointness", messages)
+        return self._check_result(
+            "inferred_type_disjointness",
+            self._type_disjointness_messages(combined, label="inferred"),
+        )
 
-    def check_functional_property_conflicts(
-        self,
-        asserted_graph: Graph,
-        inferred_graph: Graph | None,
-    ) -> CheckResult:
-        messages = self._check_functional_property_conflicts(asserted_graph, label="asserted")
-        if inferred_graph is not None:
-            messages.extend(self._check_functional_property_conflicts(inferred_graph, label="inferred"))
-        return self._check_result("functional_property_conflicts", messages)
-
-    def check_connectivity(self, asserted_graph: Graph) -> CheckResult:
-        messages = self._check_connectivity(asserted_graph)
+    def check_asserted_graph_connectivity(self, asserted_graph: Graph) -> CheckResult:
+        is_connected, message = self._validate_connectivity(asserted_graph)
+        messages = [] if is_connected else [self._error(message)]
         return self._check_result("asserted_graph_connectivity", messages)
 
-    def _check_type_disjointness(self, graph: Graph, *, label: str) -> list[str]:
+    def check_relation_domain_compatibility(self, asserted_graph: Graph) -> CheckResult:
+        messages = self._constraint_messages(
+            asserted_graph, property_kind="object", endpoint="domain"
+        )
+        return self._check_result("relation_domain_compatibility", messages)
+
+    def check_relation_range_compatibility(self, asserted_graph: Graph) -> CheckResult:
+        messages = self._constraint_messages(
+            asserted_graph, property_kind="object", endpoint="range"
+        )
+        return self._check_result("relation_range_compatibility", messages)
+
+    def check_functional_relation_conflict(self, asserted_graph: Graph) -> CheckResult:
+        messages = self._functional_conflict_messages(asserted_graph, property_kind="object")
+        return self._check_result("functional_relation_conflict", messages)
+
+    def check_attribute_domain_compatibility(self, asserted_graph: Graph) -> CheckResult:
+        messages = self._constraint_messages(
+            asserted_graph, property_kind="data", endpoint="domain"
+        )
+        return self._check_result("attribute_domain_compatibility", messages)
+
+    def check_functional_attribute_conflict(self, asserted_graph: Graph) -> CheckResult:
+        messages = self._functional_conflict_messages(asserted_graph, property_kind="data")
+        return self._check_result("functional_attribute_conflict", messages)
+
+    def _constraint_messages(
+        self, graph: Graph, *, property_kind: str, endpoint: str
+    ) -> list[str]:
         messages: list[str] = []
-        disjoint_pairs = self._disjoint_class_pairs()
-        if not disjoint_pairs:
-            return messages
-
-        types_by_node: dict[Node, set[URIRef]] = {}
-        for subj, _, class_uri in graph.triples((None, RDF.type, None)):
-            if self._is_instance_node(subj) and isinstance(class_uri, URIRef):
-                types_by_node.setdefault(subj, set()).add(class_uri)
-
-        for node, class_uris in types_by_node.items():
-            for left, right in combinations(sorted(class_uris, key=str), 2):
-                pair = frozenset((left, right))
-                if pair not in disjoint_pairs:
-                    continue
-                messages.append(
-                    self._error(
-                        "semantic",
-                        f"{label} type disjointness conflict on '{self._instance_label(node)}': "
-                        f"{self._class_label(left)} is disjoint with {self._class_label(right)}.",
-                    )
-                )
+        constraint_index = 0 if endpoint == "domain" else 1
+        for subject, predicate, object_ in graph:
+            property_name = self.ontology.get_property_name(predicate)
+            if property_name is None or not self._property_has_kind(property_name, property_kind):
+                continue
+            constraints = self.ontology.get_property_constraints(property_name)[constraint_index]
+            node = subject if endpoint == "domain" else object_
+            if self.ontology.node_matches_constraints(graph, node, constraints):
+                continue
+            labels = ", ".join(
+                self.ontology.get_class_name(uri) or str(uri) for uri in constraints
+            )
+            messages.append(self._error(
+                f"{property_kind} property '{property_name}' {endpoint} "
+                f"'{self._instance_label(node)}' is incompatible with [{labels}]."
+            ))
         return messages
 
-    def _check_functional_property_conflicts(self, graph: Graph, *, label: str) -> list[str]:
-        messages: list[str] = []
-        functional_properties = self._functional_properties()
-        if not functional_properties:
-            return messages
-
-        objects_by_subject_property: dict[tuple[Node, URIRef], set[Node]] = {}
-        for subj, pred, obj in graph:
-            if pred not in functional_properties or not self._is_instance_node(subj):
+    def _functional_conflict_messages(
+        self, graph: Graph, *, property_kind: str
+    ) -> list[str]:
+        objects_by_key: dict[tuple[Node, URIRef], set[Node]] = {}
+        for subject, predicate, object_ in graph:
+            property_name = self.ontology.get_property_name(predicate)
+            if (
+                property_name is None
+                or not self._property_has_kind(property_name, property_kind)
+                or (predicate, RDF.type, OWL.FunctionalProperty) not in self.ontology.graph
+            ):
                 continue
-            objects_by_subject_property.setdefault((subj, pred), set()).add(obj)
+            objects_by_key.setdefault((subject, predicate), set()).add(
+                self._canonical_literal(object_)
+            )
 
-        for (subj, pred), objects in objects_by_subject_property.items():
+        messages: list[str] = []
+        for (subject, predicate), objects in objects_by_key.items():
             if len(objects) <= 1:
                 continue
-            object_labels = ", ".join(sorted(self._instance_label(obj) for obj in objects))
-            messages.append(
-                self._error(
-                    "semantic",
-                    f"{label} functional property conflict on '{self._instance_label(subj)} "
-                    f"{self._property_label(pred)}': multiple objects [{object_labels}].",
-                )
-            )
+            property_name = self.ontology.get_property_name(predicate) or str(predicate)
+            values = ", ".join(sorted(self._instance_label(value) for value in objects))
+            messages.append(self._error(
+                f"Functional {property_kind} property conflict on "
+                f"'{self._instance_label(subject)} {property_name}': [{values}]."
+            ))
         return messages
 
-    def _check_connectivity(self, graph: Graph) -> list[str]:
-        is_connected, message = self._validate_connectivity(graph)
-        if is_connected:
-            return []
-        return [self._error("structural", message)]
+    def _type_disjointness_messages(self, graph: Graph, *, label: str) -> list[str]:
+        disjoint_pairs = self._disjoint_class_pairs()
+        types_by_node: dict[Node, set[URIRef]] = {}
+        for subject, _, class_uri in graph.triples((None, RDF.type, None)):
+            if self._is_instance_node(subject) and isinstance(class_uri, URIRef):
+                types_by_node.setdefault(subject, set()).add(class_uri)
+
+        messages: list[str] = []
+        for node, class_uris in types_by_node.items():
+            for left, right in combinations(sorted(class_uris, key=str), 2):
+                if frozenset((left, right)) not in disjoint_pairs:
+                    continue
+                messages.append(self._error(
+                    f"{label} type disjointness conflict on '{self._instance_label(node)}': "
+                    f"{self._class_label(left)} is disjoint with {self._class_label(right)}."
+                ))
+        return messages
 
     def _validate_connectivity(self, graph: Graph) -> tuple[bool, str]:
-        instances = set()
+        instances: set[str] = set()
         edges: list[tuple[str, str]] = []
-
-        for subj, pred, obj in graph:
-            if not self._is_instance_node(subj):
+        for subject, predicate, object_ in graph:
+            if not self._is_instance_node(subject):
                 continue
-            subj_label = self._instance_label(subj)
-            instances.add(subj_label)
-            if pred == RDF.type or not self._is_instance_node(obj):
+            subject_label = self._instance_label(subject)
+            instances.add(subject_label)
+            if predicate == RDF.type or not self._is_instance_node(object_):
                 continue
-            obj_label = self._instance_label(obj)
-            instances.add(obj_label)
-            edges.append((subj_label, obj_label))
+            object_label = self._instance_label(object_)
+            instances.add(object_label)
+            edges.append((subject_label, object_label))
 
-        if not instances or len(instances) == 1:
+        if len(instances) <= 1:
             return True, "Configuration graph is connected."
-
-        parent = {instance: instance for instance in instances}
-        rank = {instance: 0 for instance in instances}
-
-        def find(node: str) -> str:
-            while parent[node] != node:
-                parent[node] = parent[parent[node]]
-                node = parent[node]
-            return node
-
-        def union(left: str, right: str) -> None:
-            root_left = find(left)
-            root_right = find(right)
-            if root_left == root_right:
-                return
-            if rank[root_left] < rank[root_right]:
-                parent[root_left] = root_right
-            elif rank[root_left] > rank[root_right]:
-                parent[root_right] = root_left
-            else:
-                parent[root_right] = root_left
-                rank[root_left] += 1
-
+        adjacency = {instance: set() for instance in instances}
         for left, right in edges:
-            union(left, right)
-
-        roots = {find(instance) for instance in instances}
-        if len(roots) == 1:
+            adjacency[left].add(right)
+            adjacency[right].add(left)
+        remaining = set(instances)
+        components: list[list[str]] = []
+        while remaining:
+            stack = [remaining.pop()]
+            component: list[str] = []
+            while stack:
+                current = stack.pop()
+                component.append(current)
+                neighbours = adjacency[current] & remaining
+                remaining.difference_update(neighbours)
+                stack.extend(neighbours)
+            components.append(sorted(component))
+        if len(components) == 1:
             return True, "Configuration graph is connected."
-
-        components: dict[str, list[str]] = {}
-        for instance in instances:
-            components.setdefault(find(instance), []).append(instance)
         parts = [
-            f"Component {index + 1}: [{', '.join(sorted(component))}]"
-            for index, component in enumerate(components.values())
+            f"Component {index + 1}: [{', '.join(component)}]"
+            for index, component in enumerate(sorted(components))
         ]
         return False, "Configuration has disconnected components:\n" + "\n".join(parts)
 
     def _disjoint_class_pairs(self) -> set[frozenset[URIRef]]:
         pairs: set[frozenset[URIRef]] = set()
-        ontology_graph = self.ontology.graph
-
-        for left, _, right in ontology_graph.triples((None, OWL.disjointWith, None)):
+        graph = self.ontology.graph
+        for left, _, right in graph.triples((None, OWL.disjointWith, None)):
             if isinstance(left, URIRef) and isinstance(right, URIRef):
                 pairs.add(frozenset((left, right)))
-
-        for node in ontology_graph.subjects(RDF.type, OWL.AllDisjointClasses):
-            members_node = ontology_graph.value(node, OWL.members)
+        for node in graph.subjects(RDF.type, OWL.AllDisjointClasses):
+            members_node = graph.value(node, OWL.members)
             if members_node is None:
                 continue
             try:
                 members = [
-                    member for member in Collection(ontology_graph, members_node)
+                    member for member in Collection(graph, members_node)
                     if isinstance(member, URIRef)
                 ]
             except Exception:
                 continue
             for left, right in combinations(members, 2):
                 pairs.add(frozenset((left, right)))
-
         return pairs
 
-    def _functional_properties(self) -> set[URIRef]:
-        return {
-            prop for prop in self.ontology.graph.subjects(RDF.type, OWL.FunctionalProperty)
-            if isinstance(prop, URIRef)
-        }
+    def _property_has_kind(self, property_name: str, kind: str) -> bool:
+        return (
+            self.ontology.is_object_property(property_name)
+            if kind == "object"
+            else self.ontology.is_data_property(property_name)
+        )
 
     def _class_label(self, class_uri: URIRef) -> str:
         return self.ontology.get_class_name(class_uri) or str(class_uri)
 
-    def _property_label(self, property_uri: URIRef) -> str:
-        return self.ontology.get_property_name(property_uri) or str(property_uri)
-
     @staticmethod
-    def _is_instance_node(node) -> bool:
-        return isinstance(node, BNode) or (isinstance(node, URIRef) and str(node).startswith(INSTANCE_NS))
+    def _is_instance_node(node: Node) -> bool:
+        return isinstance(node, BNode) or (
+            isinstance(node, URIRef) and str(node).startswith(INSTANCE_NS)
+        )
 
     @staticmethod
     def _instance_label(node: Node) -> str:
-        if isinstance(node, URIRef):
-            return str(node).removeprefix(INSTANCE_NS)
-        return str(node)
+        return str(node).removeprefix(INSTANCE_NS) if isinstance(node, URIRef) else str(node)
 
     @staticmethod
-    def _error(category: str, message: str) -> str:
-        return f"[error][{category}] {message}"
+    def _canonical_literal(node: Node) -> Node:
+        if not isinstance(node, Literal):
+            return node
+        try:
+            value = node.toPython()
+        except Exception:
+            return node
+        if isinstance(value, bool):
+            return node
+        if isinstance(value, (int, float)):
+            number = float(value)
+            return Literal(int(number) if number.is_integer() else number)
+        return node
+
+    @staticmethod
+    def _copy_graph(graph: Graph) -> Graph:
+        clone = Graph()
+        for triple in graph:
+            clone.add(triple)
+        return clone
+
+    @staticmethod
+    def _error(message: str) -> str:
+        return f"[error][semantic] {message}"
 
     @staticmethod
     def _check_result(rule_name: str, messages: list[str]) -> CheckResult:

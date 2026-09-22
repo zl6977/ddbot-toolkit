@@ -1,8 +1,9 @@
 # DWIS CONFIG format
 
-Use one declaration or relation per line. Blank lines are allowed. Lines beginning with `dwis `
-are ignored by the current parser. Lines beginning with `#` are comment annotations and are
-ignored by the parser.
+Use one declaration, relation, or datatype attribute per line. Blank lines are allowed. Lines
+beginning with `#` are comment annotations and are ignored by the parser. A trailing semicolon is
+optional, and exact duplicate semantic lines are reduced to their first occurrence. Any other
+nonblank line, including a legacy `dwis ...` line, is invalid.
 
 ## Type declaration
 
@@ -26,15 +27,35 @@ subjectId PredicateName objectId
 - Resolve `PredicateName` to an ontology object property.
 
 A class shorthand denotes an anonymous object typed by that ontology class. It is not a normal
-instance identifier. Quantity shorthands can resolve through the ontology naming convention; for
-example, `ForceDrilling` resolves to `ForceDrillingQuantity`:
+instance identifier. The shorthand must be the exact name of a class in the loaded ontology; the
+validator does not append `Quantity` or otherwise expand aliases:
 
 ```text
 WOB:wobPoint
-wobPoint IsOfMeasurableQuantity ForceDrilling
+wobPoint IsOfMeasurableQuantity ForceDrillingQuantity
 ```
 
 The subject currently has no equivalent shorthand form and must be declared explicitly.
+
+## Datatype attribute
+
+```text
+instanceId.DataPropertyName = Literal
+```
+
+- Declare `instanceId` before assigning the attribute.
+- Resolve `DataPropertyName` to an ontology datatype property, not an object property.
+- Match the property's effective domain and range. Supported ranges are `xsd:string`,
+  `xsd:boolean`, `xsd:integer`, `xsd:int`, `xsd:decimal`, `xsd:float`, `xsd:double`, and
+  `xsd:dateTime`.
+- Quote strings and ISO 8601 date-time values with JSON-compatible double quotes. Write booleans as
+  `true` or `false`; write numeric values without quotes.
+- A functional datatype property may have only one distinct value for an instance.
+
+```text
+DataProvider:provider
+provider.ProviderName = "Acme Drilling"
+```
 
 ## Minimal example
 
@@ -61,7 +82,7 @@ RecommendedMaximum:va_bos_rmax#01
 ROPLimit:va_bos_rmax#01
 ContinuousDataType:va_bos_rmax#01
 va_bos_rmax#01 HasDynamicValue va_bos_rmax
-va_bos_rmax#01 IsOfMeasurableQuantity BlockVelocityDrilling
+va_bos_rmax#01 IsOfMeasurableQuantity BlockVelocityDrillingQuantity
 # location: bottom of string
 BottomOfStringReferenceLocation:bos#01
 va_bos_rmax#01 IsPhysicallyLocatedAt bos#01

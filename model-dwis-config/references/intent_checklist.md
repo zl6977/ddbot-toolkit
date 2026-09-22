@@ -1,8 +1,20 @@
-# Signal intent checklist
+# DWIS intent clarification guide
 
-Use this checklist to help a user describe a drilling signal well enough to model it as DWIS CONFIG.
+Use this guide to understand a DWIS configuration well enough to model it. It covers signals and
+data points, limits, procedures, advice, functions, fluids, and hydraulic or mechanical structures.
 It is a dialogue guide, not a questionnaire to present in full and not a post-generation validation
 list.
+
+## Mode boundary
+
+Follow the operating mode already selected by `SKILL.md`.
+
+- In `interactive` mode, clarify only unresolved choices that can change the graph or ontology
+  grounding.
+- In `non-interactive` mode, never turn this guide into questions or pause for confirmation. Extract
+  the strongest supported intent, omit unsupported optional structure, record useful missing
+  information, and make only indispensable conservative assumptions before continuing to generation
+  and validation.
 
 ## Dialogue method
 
@@ -10,18 +22,30 @@ Maintain a working intent sketch throughout the conversation. For each field, tr
 `known`, `assumed`, `not_applicable`, or `unknown`.
 
 1. Extract everything already stated or available in an existing CONFIG.
-2. Identify unknowns that could change the graph or ontology grounding.
-3. Ask one coherent group of high-impact questions per turn, normally no more than three.
-4. Update the sketch after every answer and do not repeat resolved questions.
-5. Stop eliciting when the core description is complete and every applicable conditional section is
-   either known, accepted as an assumption, or explicitly not applicable.
+2. Identify what the user is building. A request may activate more than one branch below.
+3. Ask core identity questions first: meaning, value, location, hierarchy, or topology. Ask context
+   questions such as origin, state, provider, or instrument afterward.
+4. When an answer activates a dependent detail, follow that branch. For example, a measured signal
+   may require its instrument, while an uncertainty model may require its parameters.
+5. Ask one coherent group of high-impact questions per turn, normally no more than three. Update the
+   sketch after every answer and never repeat a resolved question.
+6. Stop eliciting when every graph-changing choice is known, accepted as an assumption, or explicitly
+   not applicable.
 
-Ask in plain engineering language. The user does not need to know DWIS classes or predicates.
+The labels below express clarification priority, not validation severity:
+
+- **Direct**: ask plainly when the item is applicable, unresolved, and needed to choose entities or
+  relations.
+- **Light**: mention briefly when the detail is likely relevant, but do not block on it unless the
+  user's stated goal requires it.
+
+Ask in plain engineering language. When a fixed candidate set is useful, present readable choices
+rather than expecting the user to know ontology identifiers. Preserve the selected meaning in the
+intent sketch; resolve the exact identifier during ontology grounding.
 
 ## Non-interactive interpretation
 
-When `SKILL.md` selects non-interactive mode, use this checklist only to classify the supplied
-description. Do not turn checklist items into questions.
+When `SKILL.md` selects non-interactive mode, classify the supplied description once and continue:
 
 - Record an explicitly stated fact as `known`.
 - Record an absent optional detail as `unknown` and add it to `missing_information` only when useful.
@@ -29,93 +53,147 @@ description. Do not turn checklist items into questions.
 - When a missing detail is indispensable, select the most conservative interpretation supported by
   the description, ontology, and retrieved examples, then record it as `assumed` and in
   `assumptions`.
-- Do not leave `clarification_requirements` as blockers. Continue through generation and validation
-  without asking the user.
+- Do not leave `clarification_requirements` as blockers and do not ask the user questions.
 
-## Core description
+## What is being modelled?
 
-Establish these fields for every signal:
+Route the request through every relevant branch:
 
-- **Identity and purpose**: What is the signal called, what does it represent, and how will it be
-  used?
-- **Quantity or state**: What physical quantity, operational state, command, limit, or other concept
-  does its value express?
-- **Value role**: Is it an observed value, set point, command, limit, status, or another role?
-- **Value behavior**: Is it dynamic or static? If relevant, is it continuous, discrete, Boolean, or
-  categorical?
-- **Origin**: Is it measured, estimated, calculated, transformed, manually entered, or supplied by
-  another system?
-- **Context**: Where or for what equipment/process does it apply? Mark location as not applicable
-  when the concept is genuinely location-independent.
+- signal or data point;
+- limit or threshold;
+- procedure or step;
+- advice or recommendation;
+- function or controller;
+- fluid or drilling mud;
+- hydraulic network;
+- mechanical system or drill string.
 
-The engineering purpose may resolve several fields at once. Do not ask the user to restate them
-separately.
+For an existing CONFIG, infer the active branches from the file and ask only about the requested
+change or ambiguous existing semantics.
 
-## Conditional details
+## Signal or data point
 
-Ask only the sections triggered by the core description.
+- **Quantity — Direct:** What measurable quantity, operational state, command, status, or other
+  concept does the value represent?
+- **Value — Direct:** What concrete or dynamic value does it carry? Is a unit required? Is it
+  continuous, discrete, Boolean, categorical, static, or dynamic?
+- **Location — Direct when location-dependent:** Where is it physically, mechanically, or
+  hydraulically located, and what depth, position, pressure, temperature, frame, or datum is it
+  referenced to?
+- **Hydraulic placement — Direct when hydraulic:** Which hydraulic element contains it? Capture both
+  the hydraulic location and the represented quantity when those are part of the intent.
+- **Origin — Direct:** Is it measured, estimated, calculated, transformed, manually entered, or
+  provided by another system? If transformed or calculated, which inputs and method produce it?
+- **Provider — Direct when externally provided:** What kind of organization or internal service
+  provides it? Useful candidates include drilling contractor, instrumentation company, operating
+  company, service company, data-analysis service, and DWIS internal service.
+- **Uncertainty — Light unless requested:** Is uncertainty part of the model? Useful model families
+  are Gaussian, sensor accuracy/precision, and full-scale/proportion error. When selected, establish
+  its required parameters or parameter signals.
+- **Instrument — Direct when measured:** Which sensor or device measures it, and does its placement
+  or network connection need representation?
+- **Data flow and timing — Light:** Who consumes it, how is it transmitted, and do source time,
+  acquisition time, sampling, delay, clock, or synchronization matter?
 
-### Quantity and unit
+## Limit or threshold
 
-- What measurable quantity is intended?
-- Is a unit required, and which unit should be represented?
-- Is the value absolute, differential, relative, normalized, or otherwise referenced?
+- **Comparison — Direct when it is a comparison limit:** What is compared with the limit, and is the
+  intended comparison greater than, smaller than, greater-or-equal, smaller-or-equal, equal,
+  different, strictly greater, or strictly smaller? Also establish the represented quantity and
+  value when they are part of the intended limit.
+- **Incident — Direct when protective:** Which drilling incident or undesired condition does the
+  limit guard against?
+- **Function — Direct when used for control:** Which controller, advisor, or function consumes or
+  implements it?
+- **Control-limit type — Direct:** Which kind of limit is intended: annulus pressure, axial load,
+  axial velocity, differential pressure, flow rate, pressure, ROP, rotational velocity, string
+  pressure, torque, or WOB?
+- **Hierarchy — Direct when nested:** Is it a minimum, maximum, recommendation, or another child of a
+  broader drilling limit, and what is the parent or controlled subject?
+- **Provenance — Light:** Does the limit value come from a measurement, computation, or provider that
+  must be represented?
 
-### Measured signal
+## Procedure or step
 
-- What device or sensor measures it?
-- Where is the measurement taken?
-- Does the acquisition clock, timestamp, or sampling context matter?
+- **Hierarchy — Direct:** Is it a procedure, phase, action, task, or implementing procedure
+  function? Establish the required parent-child placement.
+- **Value — Direct when the step carries data:** What static or dynamic value does the step carry,
+  and what does that value mean?
+- **State and transition — Direct when relevant:** What activates, completes, permits, or follows the
+  step?
 
-### Estimated or calculated signal
+## Advice or recommendation
 
-- What computation or estimation method produces it?
-- Which input signals or parameters does it depend on?
-- At what physical, mechanical, or hydraulic location is the estimate valid?
+- **Target function — Light:** Which activable function is the advice for?
+- **Routing — Direct:** Is it delivered to a DWIS internal service, an ADCS interface, or both?
+- **Producer — Direct:** Which advisor or computation unit recommends or produces it?
+- **Management context — Light:** Which management feature, objective, constraint, or operating
+  concern does it account for?
 
-### Transformed signal
+## Function or controller
 
-- What transformation is applied?
-- Which signal or signals are its inputs?
-- Is this signal the transformation output, and must the original signal also be represented?
+- **Objective — Direct, phrased lightly when uncertain:** Which drilling-control objective does it
+  implement?
+- **Tuning — Direct when modelled:** Does it use PID tuning or calibration parameters, and which
+  function owns them?
+- **Set point — Direct when controlled:** What set value is routed to the control system?
+- **State — Direct:** Which computed state describes the function or procedure?
+- **Enablement — Direct when present:** Are allowing and enabling signals paired with their intended
+  static values and provider?
+- **State signals — Direct when present:** Are armed or alarm signals discrete, and do activated,
+  idling, or safe-mode signals describe the intended computed state?
 
-### Location and reference
+## Fluid or drilling mud
 
-- Is the relevant context physical, mechanical, hydraulic, or more than one of these?
-- What component, logical element, well position, or reference location identifies it?
-- Does it require a reference frame, datum, or direction?
+- **Fluid type — Direct:** What kind of fluid is being modelled? If rheological properties are
+  required, establish the intended drilling-liquid type.
+- **Component — Direct when applicable:** Which fluid component does the property concern?
+- **Location — Direct:** At which hydraulic element is the fluid or property located?
+- **Rheology — Direct when applicable:** Which rheological-behavior hypothesis or model applies?
 
-### Data flow and timing
+## Hydraulic network
 
-- Who or what provides the signal, and who consumes it?
-- Is it transmitted through a telemetry or communication system?
-- Does source time, acquisition time, clock, delay, or synchronization need representation?
+- **Topology — Light, becoming Direct when connections are requested:** How do branches, junctions,
+  logical elements, topside and downhole networks connect? Which equipment does the hydraulic
+  representation describe?
+- **Estimation — Light:** Which computation unit produces an estimated hydraulic quantity or state?
+- **State — Direct:** Which hydraulic-element state is intended?
 
-### Uncertainty and quality
+## Mechanical system or drill string
 
-- Must uncertainty be represented?
-- Is it Gaussian, sensor accuracy/precision, full-scale error, or another model?
-- Are uncertainty values carried by this signal or by separate signals?
-
-### Control, limits, and procedures
-
-- Is the signal used by a controller, advisor, objective, limit, incident, or procedure?
-- Is it enabling, allowing, recommending, comparing, or triggering an action?
-- Which related function, objective, incident, phase, action, or task must be represented?
+- **Connection chain — Direct:** How do the mechanical logical elements connect?
+- **Specific type — Light:** Is a more specific component type known than the generic mechanical
+  element?
+- **State — Direct:** Which mechanical-element state is intended?
+- **Motion versus mechanical state — Direct when either appears:** Does the user intend a motion type
+  or a mechanical state? Capture the engineering choice without asking the user to reason about
+  ontology exclusivity.
 
 ## Clarification priority
 
-Ask first about unknowns that select different graph structures:
+Across all active branches, ask first about unknowns that select different graph structures:
 
-1. what the value means and its role;
-2. measured versus estimated/calculated/transformed origin;
-3. required location and reference semantics;
-4. dependencies, provider/consumer flow, and control relationships;
-5. uncertainty, timing, and optional descriptive detail.
+1. what each principal entity is and what its value or role means;
+2. hierarchy, comparison, topology, or connection relationships;
+3. measured versus estimated, calculated, transformed, or externally provided origin;
+4. required physical, mechanical, hydraulic, or reference location;
+5. dependencies, provider/consumer flow, controller or procedure relationships;
+6. uncertainty, timing, tuning, and optional descriptive detail.
 
-Do not block generation on a field that is irrelevant to the requested signal. Do block when two
-plausible answers would require different entities or relations and the user has not authorized an
-assumption.
+Do not block generation on a field irrelevant to the request. In interactive mode, do block when
+two plausible answers require different entities or relations and the user has not authorized an
+assumption. In non-interactive mode, apply the conservative interpretation rule instead.
+
+## Validation-side constraints
+
+Do not ask users to declare parser or ontology mechanics. Exact class membership, datatype
+compatibility, type disjointness, functional-property cardinality, graph connectivity, edge
+direction, domain/range compatibility, and mutual-exclusion constraints belong to ontology
+grounding and validation. Ask only for the engineering meaning needed to choose between valid
+models, then let the validator diagnose their formal construction.
+
+Corpus coverage notes are evidence for how strongly to phrase a question, not proof that a relation
+is mandatory. Do not invent optional entities merely to reproduce a common corpus pattern.
 
 ## Intent sketch
 
@@ -124,6 +202,7 @@ ontology grounding begins.
 
 ```yaml
 operation: create | modify | repair
+configuration_scope: []  # signal, limit, procedure, advice, function, fluid, hydraulic, mechanical
 signal:
   name: null
   purpose: null
@@ -151,9 +230,17 @@ data_flow:
 uncertainty:
   model: null
   parameters_or_signals: []
-control_context:
-  function_or_advisor: null
-  objective_limit_incident_or_procedure: null
+related_objects:
+  limit_or_threshold: null
+  comparison: null
+  incident: null
+  procedure_or_step: null
+  advice_or_recommendation: null
+  function_or_controller: null
+  objective: null
+  fluid_or_component: null
+  hydraulic_topology_or_state: null
+  mechanical_connection_or_state: null
 assumptions: []
 missing_information: []
 clarification_requirements: []
@@ -161,4 +248,4 @@ clarification_requirements: []
 
 The sketch is complete when `clarification_requirements` is empty and the known information is
 sufficient to distinguish the intended entities and relations. `missing_information` may retain
-non-blocking details that the user chose not to model.
+non-blocking details that the user chose not to model or that non-interactive input did not provide.

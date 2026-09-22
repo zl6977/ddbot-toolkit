@@ -158,6 +158,12 @@ Use the intent sketch—not the raw conversation—as the generation input.
    `intent_sketch`, and asserted `dwis_config`; identify only the entities and relations relevant to
    the confirmed intent sketch.
 
+   Treat examples as modelling patterns, not as proof that every identifier still matches the
+   loaded ontology. Resolve every copied class, object property, datatype property, and class
+   shorthand against the current ontology. In particular, class shorthand objects must use an
+   exact ontology class name; do not assume that the validator will append `Quantity` or expand an
+   older alias.
+
    Inspect the JSONL directly only for a required field that the CLI output does not expose. Never
    load the complete corpus into context.
 
@@ -187,8 +193,10 @@ Treat validation and repair as a separate gate between the draft and the final D
    uv run <script-path> --ontology <ontology-path> validate <config-path>
    ```
 
-2. Review `hard_errors`, `repair_suggestions`, and `soft_comments`. Trace each finding to the draft
-   and the confirmed intent sketch.
+2. Review `hard_errors`, `repair_suggestions`, `soft_comments`, and failed entries in `checks`.
+   Trace each finding to the draft and the confirmed intent sketch. The checks include construction
+   syntax and vocabulary, relation and attribute domain/range compatibility, graph connectivity,
+   disjoint types, and functional-property conflicts.
 3. Repair every hard error with the smallest change that preserves the confirmed intent. Do not add
    entities or relations merely to silence the validator.
 4. Revalidate after every material repair. Repeat the validate → inspect → repair cycle until no

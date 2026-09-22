@@ -84,11 +84,7 @@ class DWISOntology:
         return None
 
     def resolve_class_name(self, name: str) -> Optional[str]:
-        if name in self.classes:
-            return name
-        if f"{name}Quantity" in self.classes:
-            return f"{name}Quantity"
-        return None
+        return name if name in self.classes else None
 
     def is_object_property(self, property_name: str) -> bool:
         return self.properties.get(property_name, {}).get("property_type") == "object"
