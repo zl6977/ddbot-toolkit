@@ -1,0 +1,19 @@
+name: Container smoke checks
+on:
+  workflow_dispatch:
+  push:
+    paths: ['docker/**', 'model-dwis-config/**', '.github/workflows/docker.yml']
+  pull_request:
+    paths: ['docker/**', 'model-dwis-config/**', '.github/workflows/docker.yml']
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker/build_docker.sh
+      - run: docker run --rm --network none ddbot-omp:local --container-smoke
+      - run: |
+          mkdir -p "$RUNNER_TEMP/dwis output"
+          docker run --rm --network none --user "$(id -u):$(id -g)" \
+            --mount "type=bind,src=$RUNNER_TEMP/dwis output,dst=/workspace/output" \
+            ddbot-omp:local --container-smoke

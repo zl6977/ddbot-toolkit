@@ -12,3 +12,6 @@ coverage.xml
 
 # Source material is intentionally not part of the product surface.
 tmp/
+
+# Local Docker configuration and deliverables
+dwis-work/

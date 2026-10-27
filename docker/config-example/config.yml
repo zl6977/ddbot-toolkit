@@ -1,0 +1,64 @@
+# OMP 18.13.2 settings for the DWIS container.
+# Copy to <host-work-folder>/config/config.yml, edit, then restart the container.
+# Provider endpoints/custom models belong in models.yml; API keys in provider.env.
+# Changes made through /settings inside the container are not saved to the host.
+# Reference: https://github.com/can1357/oh-my-pi/blob/v18.13.2/docs/settings.md
+# Uncomment only the options you need. Merge entries under existing YAML keys;
+# do not create duplicate modelRoles, tools, or other sections.
+
+# Primary model: choose a provider/model that your account can access.
+modelRoles:
+  default: openai/gpt-4.1
+  # Alternative primary model (replace the default line above):
+  # default: anthropic/claude-sonnet-4-5
+  # For a custom provider defined in models.yml:
+  # default: my-provider/my-model
+  # Optional models for particular workloads:
+  # smol: openai/gpt-4.1-mini
+  # slow: anthropic/claude-opus-4-5:high
+  # plan: anthropic/claude-sonnet-4-5
+
+# Reasoning effort for models that support it; leave unset for other models.
+# defaultThinkingLevel: medium
+
+# Restrict the model picker to models you use. Empty means all available models.
+# This is not a provider-discovery switch.
+# enabledModels:
+#   - openai/gpt-4.1
+#   - openai/gpt-4.1-mini
+
+# Disable unused model providers. Use exact OMP provider IDs.
+# Example: an OpenAI-only setup that does not use these providers.
+# disabledProviders:
+#   - anthropic
+#   - google
+#   - ollama
+# Do not disable discovery sources such as native or agents-md casually:
+# these IDs share the namespace and can affect instructions/skill discovery.
+# enabledProviders is for configuration discovery sources, not an API allow-list.
+
+# Tool approval policy:
+# always-ask: automatically approves read-only operations, asks for other tiers.
+# write: automatically approves reads and workspace writes.
+# yolo: automatically approves all tool tiers (OMP's default).
+# Batch jobs may pause/fail if the selected policy requires an interactive answer.
+# tools:
+#   approvalMode: write
+
+# Summarize long conversations to keep them within the model context window.
+# compaction:
+#   enabled: true
+
+# Start each launch fresh. Enabling this alone does not persist Docker sessions:
+# the current launcher uses a disposable OMP home.
+# autoResume: false
+
+# Reduce startup UI output.
+# startup:
+#   quiet: true
+
+# Skill installation is already configured by the container's CLI overlay:
+#   skills.enabled: true
+#   skills.enableSkillCommands: true
+#   skills.customDirectories: [/workspace/.agents/skills]
+# Those overlay values take precedence over this file. No host skill copy needed.

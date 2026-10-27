@@ -1,0 +1,10 @@
+**
+!docker/
+!docker/**
+!model-dwis-config/
+!model-dwis-config/**
+**/__pycache__
+**/*.pyc
+**/.venv
+**/.ddbot-runtime
+!LICENSE

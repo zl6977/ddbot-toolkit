@@ -156,3 +156,8 @@ contains standalone usage and development details.
 ```bash
 uv run modules/manifest-creation/python/manifest_creation.py input.dwis Provider Company
 ```
+
+## Docker
+
+See [Docker usage](docs/docker.md) to build and run OMP with the bundled skill,
+external provider configuration, and host output storage.

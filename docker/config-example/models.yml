@@ -1,0 +1,76 @@
+# OMP 18.13.2 provider/model configuration.
+# Copy to <host-work-folder>/config/models.yml and restart the container after edits.
+# Reference: https://github.com/can1357/oh-my-pi/blob/v18.13.2/docs/models.md
+# Keep API keys in config/provider.env, not in this file or the image.
+# Set config.yml -> modelRoles.default to provider-id/model-id to select a model.
+# Uncomment only the examples you need; keep a single providers mapping.
+providers:
+  # Built-in provider: use OMP's model catalog and default OpenAI endpoint.
+  # provider.env: OPENAI_API_KEY=your-key
+  # config.yml: modelRoles: {default: openai/gpt-4.1}
+  openai:
+    apiKey: OPENAI_API_KEY
+
+  # Existing ModelScope configuration. Discovery requires network access.
+  # apiKey below names the existing environment variable "apiKey".
+  # Alternatively, change it to MODELSCOPE_API_KEY and set that in provider.env.
+  # Select modelscope-cn/<exact-model-id-returned-by-discovery> in config.yml.
+  # Remove/comment this whole block if you do not use ModelScope.
+  modelscope-cn:
+    baseUrl: https://api-inference.modelscope.cn/v1
+    api: openai-completions
+    apiKey: apiKey
+    discovery:
+      type: proxy
+
+  # Another built-in provider; requires ANTHROPIC_API_KEY in provider.env.
+  # anthropic:
+  #   apiKey: ANTHROPIC_API_KEY
+
+  # Company OpenAI-compatible gateway with automatic model discovery.
+  # Replace the URL and set COMPANY_API_KEY in provider.env.
+  # Use openai-completions for /chat/completions, or openai-responses for /responses.
+  # company:
+  #   baseUrl: https://llm.example.com/v1
+  #   api: openai-completions
+  #   apiKey: COMPANY_API_KEY
+  #   discovery:
+  #     type: openai-models-list
+
+  # Custom endpoint with explicit models, useful when model discovery is absent.
+  # Replace model ID and limits with values supported by your endpoint.
+  # Select custom/my-model in config.yml. reasoning/input describe capabilities.
+  # custom:
+  #   baseUrl: https://llm.example.com/v1
+  #   api: openai-completions
+  #   apiKey: COMPANY_API_KEY
+  #   models:
+  #     - id: my-model
+  #       name: My company model
+  #       reasoning: false
+  #       input: [text]
+  #       contextWindow: 32768
+  #       maxTokens: 4096
+
+  # Local OpenAI-compatible server with no authentication.
+  # Replace 192.168.1.50 with the host/LAN address reachable from the container.
+  # 127.0.0.1 refers to the container unless Docker uses host networking.
+  # The server must listen on a reachable interface and support tool calls.
+  # local-server:
+  #   baseUrl: http://192.168.1.50:8000/v1
+  #   api: openai-completions
+  #   auth: none
+  #   discovery:
+  #     type: openai-models-list
+
+  # Ollama uses its native model-discovery endpoints, without /v1 in baseUrl.
+  # Replace the host address and choose the API supported by your Ollama version.
+  # ollama:
+  #   baseUrl: http://192.168.1.50:11434
+  #   api: openai-completions
+  #   auth: none
+  #   discovery:
+  #     type: ollama
+
+# For HTTPS endpoints using a company CA, pass --ca-cert to run_docker.sh.
+# DNS/connectivity errors are separate from certificate errors.
